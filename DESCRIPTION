@@ -1,0 +1,28 @@
+Package: dotlinplot
+Title: Faithful Plots of Zero-Inflated Single-Cell Expression
+Version: 0.1.0
+Authors@R:
+    person("Wajid", "Iqbal", role = c("aut", "cre"),
+           email = "121088089+Wajidiqbal1@users.noreply.github.com")
+Description: Dotlin plots show zero-inflated distributions, such as
+    single-cell gene expression, faithfully by separating two pieces of
+    information: the proportion of cells in which a gene is detected, drawn as
+    a bar below zero, and the distribution of the non-zero values, drawn as a
+    violin with jittered points. Works with 'Seurat' and
+    'SingleCellExperiment' objects and with plain data frames.
+License: MIT + file LICENSE
+URL: https://github.com/Wajidiqbal1/dotlinplot
+BugReports: https://github.com/Wajidiqbal1/dotlinplot/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    ggplot2 (>= 3.4.0),
+    scales (>= 1.1.0)
+Suggests:
+    Matrix,
+    SeuratObject (>= 5.0.0),
+    SingleCellExperiment,
+    SummarizedExperiment,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
