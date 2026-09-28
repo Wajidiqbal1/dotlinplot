@@ -22,7 +22,7 @@ test_that("bars are scaled to the maximum expression of all genes", {
   # gene1 reaches 4 and gene2 reaches 6: both use 6.
   expect_equal(d$bar_ymin, rep(-0.15 * 6, 6))
   expect_equal(d$bar_ymax, rep(-0.05 * 6, 6))
-  expect_equal(d$label_y, rep(-0.225 * 6, 6))
+  expect_equal(d$label_bottom, rep(-0.3 * 6, 6))
 
   expect_equal(d$x, rep(1:3, 2))
   expect_equal(d$bar_xmin, d$x - 0.325)
@@ -192,6 +192,26 @@ test_that("y-axis ticks are as fine as on an ordinary plot of the data", {
                ticks(ordinary))
 })
 
+test_that("percentages hang below their bars, inside the panel", {
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
+  is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
+                    logical(1))
+  labels <- ggplot2::layer_data(p, which(is_text))
+  d <- detection_data(p)
+  y_range <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y$
+    continuous_range
+
+  expect_equal(sort(labels$y), sort(d$bar_ymin))
+  expect_gt(p$layers[[which(is_text)]]$aes_params$vjust, 1)
+  expect_lt(y_range[1], min(d$label_bottom))
+})
+
+test_that("category names are angled so that they do not overlap", {
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+
+  expect_equal(p$theme$axis.text.x$angle, 45)
+})
+
 test_that("all gene panels share the same y-axis", {
   p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
   panels <- ggplot2::ggplot_build(p)$layout$panel_params
@@ -201,6 +221,39 @@ test_that("all gene panels share the same y-axis", {
   expect_length(panels, 2)
   expect_equal(y_range[[1]], y_range[[2]])
   expect_equal(y_breaks[[1]], y_breaks[[2]])
+})
+
+test_that("shared_y = FALSE gives each gene its own y-axis and bars", {
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type",
+                   shared_y = FALSE)
+  panels <- ggplot2::ggplot_build(p)$layout$panel_params
+  y_top <- vapply(panels, function(panel) panel$y$continuous_range[2],
+                  numeric(1))
+  d <- detection_data(p)
+
+  # gene1 reaches 4 and gene2 reaches 6.
+  expect_lt(y_top[1], y_top[2])
+  expect_equal(d$bar_ymin, rep(-0.15 * c(4, 6), each = 3))
+})
+
+test_that("violins have the same width whatever the share of expression", {
+  # With min_nonzero = 4, violins are drawn for shares of 40% (gene1 A),
+  # 75% (gene1 B) and 100% (gene2 A and C).
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type",
+                   min_nonzero = 4)
+  is_violin <- vapply(p$layers, function(l) inherits(l$geom, "GeomViolin"),
+                      logical(1))
+  violins <- ggplot2::layer_data(p, which(is_violin))
+  widths <- tapply(violins$xmax - violins$xmin,
+                   paste(violins$PANEL, violins$x), max)
+
+  expect_equal(as.vector(widths), rep(0.9, 4))
+})
+
+test_that("points have the default size of 1", {
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+
+  expect_true(all(ggplot2::layer_data(p, 2)$size == 1))
 })
 
 test_that("labels never hide a few expressing or non-expressing cells", {
@@ -235,6 +288,8 @@ test_that("invalid arguments give informative errors", {
                "positive integer")
   expect_error(dotlin_plot(cells, "gene1", "cell_type", min_nonzero = 2.5),
                "positive integer")
+  expect_error(dotlin_plot(cells, "gene1", "cell_type", shared_y = NA),
+               "TRUE or FALSE")
   expect_error(dotlin_plot(cells, character(), "cell_type"),
                "at least one gene")
   expect_error(dotlin_plot(cells, c("gene1", "nope"), "cell_type"), "'nope'")

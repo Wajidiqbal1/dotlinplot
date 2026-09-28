@@ -11,10 +11,11 @@ dotlin_plot(
   palette = NULL,
   category_order = NULL,
   min_nonzero = 10,
+  shared_y = TRUE,
   layer = NULL,
   assay = NULL,
   title = NULL,
-  point_size = 0.7,
+  point_size = 1,
   point_alpha = 0.6,
   jitter_width = 0.1
 )
@@ -41,7 +42,12 @@ categories are shown, in factor-level order (or sorted, if the column is
 not a factor).}
 
 \item{min_nonzero}{Smallest number of expressing cells for which a violin
-is drawn.}
+is drawn. This is a number of cells, not a percentage: in a small
+category, a high percentage can still be too few cells for a violin.}
+
+\item{shared_y}{If \code{TRUE} (the default), all genes share one y-axis. Set it
+to \code{FALSE} to give each gene its own y-axis, e.g. for raw counts, where
+genes can differ a lot in range.}
 
 \item{layer}{Expression matrix to use. For a Seurat object, a layer of the
 assay (default \code{"data"}, the log-normalised expression). For a
@@ -74,12 +80,15 @@ cell types, conditions, ...) in two parts that are read separately:
 (100\%): the coloured part is the share with non-zero expression, the grey
 part the share without, and the label gives the percentage.
 \item \strong{Above zero}, a violin and jittered points show the expression levels
-of the expressing cells only; zeros are left out.
+of the expressing cells only; zeros are left out. All violins have the
+same width, so their shapes can be compared even where few cells express
+the gene.
 }
 
 Categories with fewer than \code{min_nonzero} expressing cells get points but no
 violin, as a density estimated from a handful of values is not meaningful.
-All gene panels share one y-axis, so genes can be compared directly.
+By default all gene panels share one y-axis, so genes can be compared
+directly.
 
 Only values above zero count as expressed, so use non-negative data such as
 log-normalised expression (the default for Seurat and SingleCellExperiment

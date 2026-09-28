@@ -14,7 +14,7 @@ In single-cell data, most genes are detected in only some of the cells, so most 
 A dotlin plot separates the two questions hidden in the data:
 
 1.  **What share of the cells in each group express the gene?** A bar below zero that stands for all cells in the group (100%): its coloured part is the share that expresses the gene, its grey part the share that does not, with the percentage underneath. (This is the information a dot plot encodes as dot size.)
-2.  **How strongly is the gene expressed in those cells?** A violin with points above zero, drawn from the non-zero values only.
+2.  **How strongly is the gene expressed in those cells?** A violin with points above zero, drawn from the non-zero values only. All violins have the same width, so their shapes can be compared even where few cells express the gene.
 
 ![](images/comparison.png)
 
@@ -52,13 +52,16 @@ dotlin_plot(df, genes = c("CST3", "NKG7", "PPBP"), category_col = "cell_type")
 
 Only values above zero count as expressed, so use non-negative data such as log-normalised expression, not scaled data. A warning is given if negative values are found.
 
+All genes share one y-axis, so they can be compared directly. For raw counts (`layer = "counts"`), where genes can differ a lot in range, `shared_y = FALSE` gives each gene its own y-axis.
+
 The result is a ggplot object, so it can be styled and saved as usual:
 
 ```r
 library(ggplot2)
 
+# The categories are already named on the x-axis, so the legend can go
 dotlin_plot(pbmc, genes = "CST3", title = "CST3") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(legend.position = "none")
 
 ggsave("dotlin_plot.png", width = 8, height = 4)
 ```
@@ -72,11 +75,12 @@ ggsave("dotlin_plot.png", width = 8, height = 4)
 | `category_col`   | `NULL`  | Metadata column that holds the categories. `NULL` uses the identities (Seurat) or cell labels (SingleCellExperiment); required for data frames. |
 | `palette`        | `NULL`  | Colours: a named vector or list mapping categories to colours, or unnamed colours in category order. `NULL` uses the ggplot2 hue palette. |
 | `category_order` | `NULL`  | Categories to show, in x-axis order; categories not listed are left out. By default: factor levels, or sorted values. |
-| `min_nonzero`    | `10`    | Smallest number of expressing cells for which a violin is drawn. |
+| `min_nonzero`    | `10`    | Smallest number of expressing cells (not a percentage) for which a violin is drawn. |
+| `shared_y`       | `TRUE`  | All genes share one y-axis. `FALSE` gives each gene its own y-axis (e.g. for raw counts). |
 | `layer`          | `NULL`  | Expression matrix: a Seurat layer (default `"data"`) or a SingleCellExperiment assay (default `"logcounts"`). |
 | `assay`          | `NULL`  | Seurat assay to use (default `DefaultAssay(object)`). |
 | `title`          | `NULL`  | Plot title. |
-| `point_size`     | `0.7`   | Size of the points. |
+| `point_size`     | `1`     | Size of the points. |
 | `point_alpha`    | `0.6`   | Opacity of the points. |
 | `jitter_width`   | `0.1`   | Horizontal jitter of the points. |
 
@@ -90,10 +94,22 @@ ggsave("dotlin_plot.png", width = 8, height = 4)
 | Coloured part of the bar  | The share of cells with non-zero expression. |
 | Grey part of the bar      | The share of cells with zero expression. |
 | Percentage                | The coloured share as a number; `<1%` or `>99%` when rounding would hide a few cells. |
-| Violin                    | The distribution of the non-zero values. |
+| Violin                    | The distribution of the non-zero values. All violins have the same width; the share of expressing cells is shown by the bar. |
 | Points                    | The individual cells with non-zero expression. |
 
-Categories with fewer than `min_nonzero` expressing cells show points but no violin.
+### When is a violin drawn?
+
+A violin is drawn only when **at least 10 cells** in a category express the gene (`min_nonzero = 10`). With fewer, the category shows its points but no violin, because a violin estimated from so few cells would mostly show smoothing, not data.
+
+This is a number of cells, not a percentage, so a small cell type can have a high percentage and still no violin:
+
+| Example (PBMC 3k)    | Expressing cells | Violin? |
+|----------------------|------------------|---------|
+| CST3 in platelets    | 64% of 14 cells = 9 cells | No, only 9 cells |
+| NKG7 in DCs          | 28% of 32 cells = 9 cells | No, only 9 cells |
+| MS4A1 in naive CD4 T | 4% of 697 cells = 30 cells | Yes |
+
+Every expressing cell is always drawn as a point, so nothing is hidden. To draw violins from fewer cells, lower `min_nonzero`, for example `dotlin_plot(pbmc, genes, min_nonzero = 5)`.
 
 ## License
 

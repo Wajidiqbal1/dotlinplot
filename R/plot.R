@@ -39,13 +39,17 @@ is_string <- function(x) {
 
 # Validate the arguments that do not depend on the type of `object`. Returns
 # the genes to plot, without duplicates.
-validate_inputs <- function(genes, category_col, palette, min_nonzero, layer,
-                            assay) {
+validate_inputs <- function(genes, category_col, palette, min_nonzero,
+                            shared_y, layer, assay) {
   is_count <- is.numeric(min_nonzero) && length(min_nonzero) == 1 &&
     is.finite(min_nonzero) && min_nonzero >= 1 && min_nonzero %% 1 == 0
 
   if (!is_count) {
     stop("`min_nonzero` must be a positive integer.", call. = FALSE)
+  }
+
+  if (!isTRUE(shared_y) && !isFALSE(shared_y)) {
+    stop("`shared_y` must be TRUE or FALSE.", call. = FALSE)
   }
 
   if (!is.null(category_col) && !is_string(category_col)) {
@@ -362,7 +366,8 @@ get_palette <- function(palette, categories) {
 # Plot data preparation --------------------------------------------------------
 
 # Prepare long-format data and non-zero proportion information.
-prepare_plot_data <- function(expression, category, categories, min_nonzero) {
+prepare_plot_data <- function(expression, category, categories, min_nonzero,
+                              shared_y) {
   genes <- colnames(expression)
 
   keep <- as.character(category) %in% categories
@@ -385,10 +390,11 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
                                  drop = FALSE]
   nonzero_prop <- nonzero_count / as.vector(table(category))
 
-  expression_long$nonzero_count <- nonzero_count[cbind(
+  cell_group <- cbind(
     as.integer(expression_long$category),
     as.integer(expression_long$gene)
-  )]
+  )
+  expression_long$nonzero_count <- nonzero_count[cell_group]
 
   detection_data <- data.frame(
     category = factor(rep(categories, times = length(genes)),
@@ -401,15 +407,19 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
   detection_data$x <- as.numeric(detection_data$category)
 
   # The bars are scaled to the highest value of all genes, so that every panel
-  # has the same y-axis and the same bars. If nothing is expressed at all,
-  # 1 keeps the bars (all at 0%) visible.
-  max_expression <- max(expression)
-
-  if (max_expression <= 0) {
-    max_expression <- 1
+  # has the same y-axis and the same bars, or to the highest value of each
+  # gene when each gene has its own y-axis. Where nothing is expressed, 1 keeps
+  # the bars (all at 0%) visible.
+  if (shared_y) {
+    max_expression <- rep(max(expression), length(genes))
+  } else {
+    max_expression <- apply(expression, 2, max)
   }
 
-  detection_data$max_expression <- max_expression
+  max_expression[max_expression <= 0] <- 1
+
+  detection_data$max_expression <- rep(max_expression,
+                                       each = length(categories))
 
   bar_width <- 0.65
 
@@ -427,7 +437,8 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
   detection_data$label[percent == 0 & detection_data$nonzero_prop > 0] <- "<1%"
   detection_data$label[percent == 100 & detection_data$nonzero_prop < 1] <-
     ">99%"
-  detection_data$label_y <- -detection_data$bar_height * 1.5
+  # Bottom of the space kept free for the percentage below each bar.
+  detection_data$label_bottom <- -detection_data$max_expression * 0.3
 
   strip_data <- expression_long[expression_long$expression > 0, ,
                                 drop = FALSE]
@@ -449,11 +460,14 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
 
 # Construct the ggplot.
 build_plot <- function(plot_data, categories, category_label, palette, title,
-                       point_size, point_alpha, jitter_width) {
+                       shared_y, point_size, point_alpha, jitter_width) {
   ggplot2::ggplot(
     plot_data$expression_long,
     ggplot2::aes(x = .data$x, y = .data$expression, fill = .data$category)
   ) +
+    # Every violin has the same width, so that its shape shows only how the
+    # expressing cells are distributed; how many cells express the gene is
+    # shown by the bar.
     ggplot2::geom_violin(
       data = plot_data$violin_data,
       trim = TRUE,
@@ -492,15 +506,27 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
       ),
       inherit.aes = FALSE
     ) +
+    # The label hangs from the bottom of its bar (vjust > 1), so it never
+    # overlaps the bar, however short the panel is. The blank layer keeps
+    # room for it below the bars.
     ggplot2::geom_text(
       data = plot_data$detection_data,
       mapping = ggplot2::aes(
         x = .data$x,
-        y = .data$label_y,
+        y = .data$bar_ymin,
         label = .data$label
       ),
+      vjust = 1.2,
       size = 7 / ggplot2::.pt,
       colour = "#333333",
+      inherit.aes = FALSE
+    ) +
+    ggplot2::geom_blank(
+      data = plot_data$detection_data,
+      mapping = ggplot2::aes(
+        x = .data$x,
+        y = .data$label_bottom
+      ),
       inherit.aes = FALSE
     ) +
     ggplot2::geom_hline(
@@ -510,7 +536,8 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
     ) +
     ggplot2::facet_wrap(
       ~gene,
-      ncol = 1
+      ncol = 1,
+      scales = if (shared_y) "fixed" else "free_y"
     ) +
     ggplot2::labs(
       title = title,
@@ -532,7 +559,16 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
     ggplot2::scale_y_continuous(
       breaks = nonnegative_breaks
     ) +
-    ggplot2::theme_classic()
+    # Labels may reach just past the panel in very short panels: better than
+    # cutting them off.
+    ggplot2::coord_cartesian(
+      clip = "off"
+    ) +
+    ggplot2::theme_classic() +
+    # Angled category names do not run into each other.
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    )
 }
 
 
@@ -547,11 +583,14 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #'   (100%): the coloured part is the share with non-zero expression, the grey
 #'   part the share without, and the label gives the percentage.
 #' * **Above zero**, a violin and jittered points show the expression levels
-#'   of the expressing cells only; zeros are left out.
+#'   of the expressing cells only; zeros are left out. All violins have the
+#'   same width, so their shapes can be compared even where few cells express
+#'   the gene.
 #'
 #' Categories with fewer than `min_nonzero` expressing cells get points but no
 #' violin, as a density estimated from a handful of values is not meaningful.
-#' All gene panels share one y-axis, so genes can be compared directly.
+#' By default all gene panels share one y-axis, so genes can be compared
+#' directly.
 #'
 #' Only values above zero count as expressed, so use non-negative data such as
 #' log-normalised expression (the default for Seurat and SingleCellExperiment
@@ -573,7 +612,11 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #'   categories are shown, in factor-level order (or sorted, if the column is
 #'   not a factor).
 #' @param min_nonzero Smallest number of expressing cells for which a violin
-#'   is drawn.
+#'   is drawn. This is a number of cells, not a percentage: in a small
+#'   category, a high percentage can still be too few cells for a violin.
+#' @param shared_y If `TRUE` (the default), all genes share one y-axis. Set it
+#'   to `FALSE` to give each gene its own y-axis, e.g. for raw counts, where
+#'   genes can differ a lot in range.
 #' @param layer Expression matrix to use. For a Seurat object, a layer of the
 #'   assay (default `"data"`, the log-normalised expression). For a
 #'   SingleCellExperiment, an assay (default `"logcounts"` if present,
@@ -615,10 +658,11 @@ dotlin_plot <- function(object,
                         palette = NULL,
                         category_order = NULL,
                         min_nonzero = 10,
+                        shared_y = TRUE,
                         layer = NULL,
                         assay = NULL,
                         title = NULL,
-                        point_size = 0.7,
+                        point_size = 1,
                         point_alpha = 0.6,
                         jitter_width = 0.1) {
   genes <- validate_inputs(
@@ -626,6 +670,7 @@ dotlin_plot <- function(object,
     category_col = category_col,
     palette = palette,
     min_nonzero = min_nonzero,
+    shared_y = shared_y,
     layer = layer,
     assay = assay
   )
@@ -653,7 +698,8 @@ dotlin_plot <- function(object,
     expression = cell_data$expression,
     category = cell_data$category,
     categories = categories,
-    min_nonzero = min_nonzero
+    min_nonzero = min_nonzero,
+    shared_y = shared_y
   )
 
   build_plot(
@@ -662,6 +708,7 @@ dotlin_plot <- function(object,
     category_label = cell_data$category_label,
     palette = resolved_palette,
     title = title,
+    shared_y = shared_y,
     point_size = point_size,
     point_alpha = point_alpha,
     jitter_width = jitter_width
