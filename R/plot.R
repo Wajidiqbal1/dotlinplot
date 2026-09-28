@@ -6,9 +6,11 @@
 
 # General utilities ------------------------------------------------------------
 
-# Generate y-axis breaks restricted to non-negative values.
+# Generate y-axis breaks for the expression values only. They are computed
+# from 0 to the top of the axis, so that the space taken by the bars below
+# zero does not make them coarser than on an ordinary plot of the same data.
 nonnegative_breaks <- function(limits) {
-  breaks <- scales::breaks_extended(n = 5)(limits)
+  breaks <- scales::breaks_extended(n = 5)(c(0, limits[2]))
   breaks[breaks >= 0]
 }
 
@@ -398,13 +400,16 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
 
   detection_data$x <- as.numeric(detection_data$category)
 
-  # Genes with no positive values fall back to 1, so that their bars (all at
-  # 0%) are still drawn.
-  max_expression <- apply(expression, 2, max)
-  max_expression[max_expression <= 0] <- 1
+  # The bars are scaled to the highest value of all genes, so that every panel
+  # has the same y-axis and the same bars. If nothing is expressed at all,
+  # 1 keeps the bars (all at 0%) visible.
+  max_expression <- max(expression)
 
-  detection_data$max_expression <- rep(max_expression,
-                                       each = length(categories))
+  if (max_expression <= 0) {
+    max_expression <- 1
+  }
+
+  detection_data$max_expression <- max_expression
 
   bar_width <- 0.65
 
@@ -415,7 +420,13 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero) {
   detection_data$bar_xmax <- detection_data$x + bar_width / 2
   detection_data$detection_xmax <- detection_data$bar_xmin +
     bar_width * detection_data$nonzero_prop
-  detection_data$label <- paste0(round(detection_data$nonzero_prop * 100), "%")
+  # Rounding must not hide a few expressing cells ("0%") or a few cells
+  # without expression ("100%").
+  percent <- round(detection_data$nonzero_prop * 100)
+  detection_data$label <- paste0(percent, "%")
+  detection_data$label[percent == 0 & detection_data$nonzero_prop > 0] <- "<1%"
+  detection_data$label[percent == 100 & detection_data$nonzero_prop < 1] <-
+    ">99%"
   detection_data$label_y <- -detection_data$bar_height * 1.5
 
   strip_data <- expression_long[expression_long$expression > 0, ,
@@ -499,7 +510,6 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
     ) +
     ggplot2::facet_wrap(
       ~gene,
-      scales = "free_y",
       ncol = 1
     ) +
     ggplot2::labs(
@@ -508,8 +518,11 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
       x = category_label,
       y = "Expression"
     ) +
+    # Without explicit limits the legend would list categories in the order
+    # the layers first meet them, putting those without a violin last.
     ggplot2::scale_fill_manual(
-      values = palette
+      values = palette,
+      limits = categories
     ) +
     ggplot2::scale_x_continuous(
       breaks = seq_along(categories),
@@ -530,14 +543,15 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #' Shows the expression of each gene across categories of cells (clusters,
 #' cell types, conditions, ...) in two parts that are read separately:
 #'
-#' * **Below zero**, a bar for each category shows the share of its cells with
-#'   non-zero expression: the grey bar stands for all cells, the coloured part
-#'   for the expressing ones, and the label gives the percentage.
+#' * **Below zero**, a bar for each category stands for all of its cells
+#'   (100%): the coloured part is the share with non-zero expression, the grey
+#'   part the share without, and the label gives the percentage.
 #' * **Above zero**, a violin and jittered points show the expression levels
 #'   of the expressing cells only; zeros are left out.
 #'
 #' Categories with fewer than `min_nonzero` expressing cells get points but no
 #' violin, as a density estimated from a handful of values is not meaningful.
+#' All gene panels share one y-axis, so genes can be compared directly.
 #'
 #' Only values above zero count as expressed, so use non-negative data such as
 #' log-normalised expression (the default for Seurat and SingleCellExperiment
@@ -590,22 +604,23 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #' dotlin_plot(pbmc, genes = c("CST3", "NKG7", "PPBP"))
 #'
 #' # SingleCellExperiment: uses the "logcounts" assay by default
-#' dotlin_plot(sce, genes = c("CST3", "NKG7", "PPBP"), category_col = "cell_type")
+#' dotlin_plot(sce, genes = c("CST3", "NKG7", "PPBP"),
+#'             category_col = "cell_type")
 #' }
 #'
 #' @export
 dotlin_plot <- function(object,
-                      genes,
-                      category_col = NULL,
-                      palette = NULL,
-                      category_order = NULL,
-                      min_nonzero = 10,
-                      layer = NULL,
-                      assay = NULL,
-                      title = NULL,
-                      point_size = 0.7,
-                      point_alpha = 0.6,
-                      jitter_width = 0.1) {
+                        genes,
+                        category_col = NULL,
+                        palette = NULL,
+                        category_order = NULL,
+                        min_nonzero = 10,
+                        layer = NULL,
+                        assay = NULL,
+                        title = NULL,
+                        point_size = 0.7,
+                        point_alpha = 0.6,
+                        jitter_width = 0.1) {
   genes <- validate_inputs(
     genes = genes,
     category_col = category_col,

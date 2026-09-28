@@ -16,13 +16,13 @@ test_that("non-zero proportions and labels are correct", {
   expect_equal(d$label, c("40%", "75%", "20%", "100%", "0%", "100%"))
 })
 
-test_that("bars are scaled to the maximum expression of each gene", {
+test_that("bars are scaled to the maximum expression of all genes", {
   d <- detection_data(dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type"))
 
-  max_expression <- rep(c(4, 6), each = 3)
-  expect_equal(d$bar_ymin, -0.15 * max_expression)
-  expect_equal(d$bar_ymax, -0.05 * max_expression)
-  expect_equal(d$label_y, -0.225 * max_expression)
+  # gene1 reaches 4 and gene2 reaches 6: both use 6.
+  expect_equal(d$bar_ymin, rep(-0.15 * 6, 6))
+  expect_equal(d$bar_ymax, rep(-0.05 * 6, 6))
+  expect_equal(d$label_y, rep(-0.225 * 6, 6))
 
   expect_equal(d$x, rep(1:3, 2))
   expect_equal(d$bar_xmin, d$x - 0.325)
@@ -52,7 +52,7 @@ test_that("points show all non-zero values, violins need min_nonzero", {
                   c("gene1 B", "gene2 A"))
 
   violins <- geom_data(dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type",
-                                 min_nonzero = 5), "GeomViolin")
+                                   min_nonzero = 5), "GeomViolin")
   expect_setequal(unique(paste(violins$gene, violins$category)),
                   c("gene1 B", "gene2 A", "gene2 C"))
 })
@@ -95,8 +95,17 @@ test_that("categories follow factor levels, or sorted values otherwise", {
   expect_equal(levels(detection_data(p)$category), c("1", "2", "10"))
 })
 
+test_that("the legend follows the category order", {
+  # Only category B has enough expressing cells for a violin.
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  fill <- ggplot2::ggplot_build(p)$plot$scales$get_scales("fill")
+
+  expect_equal(fill$get_limits(), c("A", "B", "C"))
+})
+
 test_that("x-axis breaks and labels match the categories", {
-  p <- dotlin_plot(toy_data(), "gene1", "cell_type", category_order = c("C", "A"))
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type",
+                   category_order = c("C", "A"))
   x_scale <- ggplot2::layer_scales(p)$x
 
   expect_equal(x_scale$get_breaks(), c(1, 2))
@@ -104,7 +113,8 @@ test_that("x-axis breaks and labels match the categories", {
 })
 
 test_that("category_order sets the order and filters categories", {
-  p <- dotlin_plot(toy_data(), "gene1", "cell_type", category_order = c("C", "A"))
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type",
+                   category_order = c("C", "A"))
   d <- detection_data(p)
 
   expect_equal(levels(d$category), c("C", "A"))
@@ -118,13 +128,13 @@ test_that("a category named \"\" is handled", {
   cells$cell_type[cells$cell_type == "C"] <- ""
 
   p <- dotlin_plot(cells, "gene1", "cell_type",
-                 palette = c("red", "green", "blue"))
+                   palette = c("red", "green", "blue"))
   d <- detection_data(p)
   expect_equal(d$label, c("20%", "40%", "75%"))
   expect_equal(ggplot2::layer_data(p, 4)$fill, c("red", "green", "blue"))
 
   p <- dotlin_plot(cells, "gene1", "cell_type",
-                 palette = c(A = "green", B = "blue", "red"))
+                   palette = c(A = "green", B = "blue", "red"))
   expect_equal(ggplot2::layer_data(p, 4)$fill, c("red", "green", "blue"))
 })
 
@@ -147,11 +157,11 @@ test_that("palettes can be named, unnamed or generated", {
   expect_equal(ggplot2::layer_data(p, 4)$fill, c("blue", "green", "red"))
 
   p <- dotlin_plot(toy_data(), "gene1", "cell_type",
-                 palette = list(A = "blue", B = "green", C = "red"))
+                   palette = list(A = "blue", B = "green", C = "red"))
   expect_equal(ggplot2::layer_data(p, 4)$fill, c("blue", "green", "red"))
 
   p <- dotlin_plot(toy_data(), "gene1", "cell_type",
-                 palette = c("blue", "green", "red", "black"))
+                   palette = c("blue", "green", "red", "black"))
   expect_equal(ggplot2::layer_data(p, 4)$fill, c("blue", "green", "red"))
 })
 
@@ -168,6 +178,44 @@ test_that("y-axis breaks are non-negative", {
   expect_equal(nonnegative_breaks(c(-0.9, 4.2)), c(0, 1, 2, 3, 4))
 })
 
+test_that("y-axis ticks are as fine as on an ordinary plot of the data", {
+  cells <- toy_data()
+  ticks <- function(p) {
+    y <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y
+    breaks <- y$get_breaks()
+    breaks[!is.na(breaks)]
+  }
+  ordinary <- ggplot2::ggplot(cells, ggplot2::aes(cell_type, gene1)) +
+    ggplot2::geom_point()
+
+  expect_equal(ticks(dotlin_plot(cells, "gene1", "cell_type")),
+               ticks(ordinary))
+})
+
+test_that("all gene panels share the same y-axis", {
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
+  panels <- ggplot2::ggplot_build(p)$layout$panel_params
+  y_range <- lapply(panels, function(panel) panel$y$continuous_range)
+  y_breaks <- lapply(panels, function(panel) panel$y$get_breaks())
+
+  expect_length(panels, 2)
+  expect_equal(y_range[[1]], y_range[[2]])
+  expect_equal(y_breaks[[1]], y_breaks[[2]])
+})
+
+test_that("labels never hide a few expressing or non-expressing cells", {
+  cells <- data.frame(
+    group = rep(c("one", "most", "none", "all"), each = 1000),
+    gene = c(1, rep(0, 999), rep(1, 999), 0, rep(0, 1000), rep(1, 1000))
+  )
+
+  d <- detection_data(dotlin_plot(cells, "gene", "group",
+                                  category_order = c("one", "most", "none",
+                                                     "all")))
+
+  expect_equal(d$label, c("<1%", ">99%", "0%", "100%"))
+})
+
 test_that("negative and missing values give warnings", {
   cells <- toy_data()
   cells$gene1[1] <- -1
@@ -175,7 +223,8 @@ test_that("negative and missing values give warnings", {
 
   cells <- toy_data()
   cells$gene1[1] <- NA
-  expect_warning(p <- dotlin_plot(cells, "gene1", "cell_type"), "treated as zero")
+  expect_warning(p <- dotlin_plot(cells, "gene1", "cell_type"),
+                 "treated as zero")
   expect_equal(detection_data(p)$label, c("40%", "70%", "20%"))
 })
 
@@ -186,7 +235,8 @@ test_that("invalid arguments give informative errors", {
                "positive integer")
   expect_error(dotlin_plot(cells, "gene1", "cell_type", min_nonzero = 2.5),
                "positive integer")
-  expect_error(dotlin_plot(cells, character(), "cell_type"), "at least one gene")
+  expect_error(dotlin_plot(cells, character(), "cell_type"),
+               "at least one gene")
   expect_error(dotlin_plot(cells, c("gene1", "nope"), "cell_type"), "'nope'")
   expect_error(dotlin_plot(cells, "gene1"), "must be supplied")
   expect_error(dotlin_plot(cells, "gene1", "nope"), "not a column")
@@ -199,10 +249,10 @@ test_that("invalid arguments give informative errors", {
   expect_error(dotlin_plot(cells, "gene1", "cell_type", assay = c("a", "b")),
                "single assay name")
   expect_error(dotlin_plot(cells, "gene1", "cell_type",
-                         category_order = character()),
+                           category_order = character()),
                "cannot be empty")
   expect_error(dotlin_plot(cells, "gene1", "cell_type",
-                         category_order = c("A", "Z")),
+                           category_order = c("A", "Z")),
                "'Z'")
   expect_error(dotlin_plot(cells, "gene1", "cell_type", palette = c(A = "red")),
                "missing colours .*'B', 'C'")

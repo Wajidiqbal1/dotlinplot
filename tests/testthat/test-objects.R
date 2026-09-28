@@ -22,7 +22,8 @@ test_that("Seurat objects accept a metadata column, layer and assay", {
   expect_equal(detection_data(p)$label, expected_labels)
   expect_equal(p$labels$x, "cell_type")
 
-  p <- dotlin_plot(object, "gene2", "cell_type", layer = "counts", assay = "RNA")
+  p <- dotlin_plot(object, "gene2", "cell_type", layer = "counts",
+                   assay = "RNA")
   expect_equal(max(geom_data(p, "GeomPoint")$expression), 30)
 })
 
@@ -47,7 +48,7 @@ test_that("Seurat objects with a v3 assay are supported", {
   object[["OLD"]] <- assay
 
   d <- detection_data(dotlin_plot(object, c("gene1", "gene2"), "cell_type",
-                                assay = "OLD"))
+                                  assay = "OLD"))
 
   expect_equal(d$label, expected_labels)
 })

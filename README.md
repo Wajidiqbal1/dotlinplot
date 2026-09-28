@@ -13,7 +13,7 @@ In single-cell data, most genes are detected in only some of the cells, so most 
 
 A dotlin plot separates the two questions hidden in the data:
 
-1.  **What share of the cells in each group express the gene?** A bar below zero: the grey bar stands for all cells in the group, and the coloured part for the expressing ones, with the percentage underneath. (This is the information a dot plot encodes as dot size.)
+1.  **What share of the cells in each group express the gene?** A bar below zero that stands for all cells in the group (100%): its coloured part is the share that expresses the gene, its grey part the share that does not, with the percentage underneath. (This is the information a dot plot encodes as dot size.)
 2.  **How strongly is the gene expressed in those cells?** A violin with points above zero, drawn from the non-zero values only.
 
 ![](images/comparison.png)
@@ -86,9 +86,10 @@ ggsave("dotlin_plot.png", width = 8, height = 4)
 
 | Element                   | Shows |
 |---------------------------|-------|
-| Grey bar                  | All cells in the category (100%). |
+| Whole bar                 | All cells in the category (100%). |
 | Coloured part of the bar  | The share of cells with non-zero expression. |
-| Percentage                | That share as a number. |
+| Grey part of the bar      | The share of cells with zero expression. |
+| Percentage                | The coloured share as a number; `<1%` or `>99%` when rounding would hide a few cells. |
 | Violin                    | The distribution of the non-zero values. |
 | Points                    | The individual cells with non-zero expression. |
 

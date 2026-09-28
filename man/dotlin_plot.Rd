@@ -70,15 +70,16 @@ cell types, conditions, ...) in two parts that are read separately:
 }
 \details{
 \itemize{
-\item \strong{Below zero}, a bar for each category shows the share of its cells with
-non-zero expression: the grey bar stands for all cells, the coloured part
-for the expressing ones, and the label gives the percentage.
+\item \strong{Below zero}, a bar for each category stands for all of its cells
+(100\%): the coloured part is the share with non-zero expression, the grey
+part the share without, and the label gives the percentage.
 \item \strong{Above zero}, a violin and jittered points show the expression levels
 of the expressing cells only; zeros are left out.
 }
 
 Categories with fewer than \code{min_nonzero} expressing cells get points but no
 violin, as a density estimated from a handful of values is not meaningful.
+All gene panels share one y-axis, so genes can be compared directly.
 
 Only values above zero count as expressed, so use non-negative data such as
 log-normalised expression (the default for Seurat and SingleCellExperiment
@@ -99,7 +100,8 @@ dotlin_plot(cells, "gene_x", category_col = "cell_type")
 dotlin_plot(pbmc, genes = c("CST3", "NKG7", "PPBP"))
 
 # SingleCellExperiment: uses the "logcounts" assay by default
-dotlin_plot(sce, genes = c("CST3", "NKG7", "PPBP"), category_col = "cell_type")
+dotlin_plot(sce, genes = c("CST3", "NKG7", "PPBP"),
+            category_col = "cell_type")
 }
 
 }
