@@ -37,17 +37,18 @@ library(dotlinplot)
 # SeuratData::InstallData("pbmc3k")  # once, to get the example data
 pbmc <- SeuratData::LoadData("pbmc3k", type = "pbmc3k.final")
 
-dotlin_plot(pbmc, genes = c("CST3", "NKG7", "PPBP"))
+genes <- c("LYZ", "CCL5", "IL32", "PTPRCAP", "FCGR3A", "PF4")
+dotlin_plot(pbmc, genes)
 ```
 
 For a Seurat object, cells are grouped by their identities (`Idents()`) and the log-normalised `"data"` layer is used, so nothing else is needed. Other inputs work the same way:
 
 ```r
 # SingleCellExperiment: uses colLabels() and the "logcounts" assay by default
-dotlin_plot(sce, genes = c("CST3", "NKG7", "PPBP"), category_col = "cell_type")
+dotlin_plot(sce, genes, category_col = "cell_type")
 
 # Data frame: one row per cell, one numeric column per gene
-dotlin_plot(df, genes = c("CST3", "NKG7", "PPBP"), category_col = "cell_type")
+dotlin_plot(df, genes, category_col = "cell_type")
 ```
 
 Only values above zero count as expressed, so use non-negative data such as log-normalised expression, not scaled data. A warning is given if negative values are found.
@@ -60,7 +61,7 @@ The result is a ggplot object, so it can be styled and saved as usual:
 library(ggplot2)
 
 # The categories are already named on the x-axis, so the legend can go
-dotlin_plot(pbmc, genes = "CST3", title = "CST3") +
+dotlin_plot(pbmc, "LYZ", title = "LYZ") +
   theme(legend.position = "none")
 
 ggsave("dotlin_plot.png", width = 8, height = 4)
@@ -103,11 +104,11 @@ A violin is drawn only when **at least 10 cells** in a category express the gene
 
 This is a number of cells, not a percentage, so a small cell type can have a high percentage and still no violin:
 
-| Example (PBMC 3k)    | Expressing cells | Violin? |
-|----------------------|------------------|---------|
-| CST3 in platelets    | 64% of 14 cells = 9 cells | No, only 9 cells |
-| NKG7 in DCs          | 28% of 32 cells = 9 cells | No, only 9 cells |
-| MS4A1 in naive CD4 T | 4% of 697 cells = 30 cells | Yes |
+| Example (PBMC 3k, first image) | Expressing cells | Violin? |
+|-------------------------------|------------------|---------|
+| LYZ in platelets              | 50% of 14 cells = 7 cells | No, only 7 cells |
+| IL32 in DCs                   | 28% of 32 cells = 9 cells | No, only 9 cells |
+| FCGR3A in naive CD4 T         | 4% of 697 cells = 26 cells | Yes |
 
 Every expressing cell is always drawn as a point, so nothing is hidden. To draw violins from fewer cells, lower `min_nonzero`, for example `dotlin_plot(pbmc, genes, min_nonzero = 5)`.
 
