@@ -1,6 +1,6 @@
 # dotlinplot
 
-![](images/dotlinplot_example.png)
+![](images/dotlin_six_genes.png)
 
 **dotlinplot** draws dotlin plots: faithful pictures of zero-inflated data such as single-cell gene expression. It works directly on [Seurat](https://satijalab.org/seurat/) and [SingleCellExperiment](https://bioconductor.org/packages/SingleCellExperiment/) objects, and on plain data frames.
 
