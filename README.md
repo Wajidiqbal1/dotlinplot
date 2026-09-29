@@ -1,6 +1,6 @@
 # dotlinplot
 
-![](images/dotlin_six_genes.png)
+![](images/example_six_genes.png)
 
 **dotlinplot** draws dotlin plots: faithful pictures of zero-inflated data such as single-cell gene expression. It works directly on [Seurat](https://satijalab.org/seurat/) and [SingleCellExperiment](https://bioconductor.org/packages/SingleCellExperiment/) objects, and on plain data frames.
 
@@ -16,7 +16,7 @@ A dotlin plot separates the two questions hidden in the data:
 1.  **What share of the cells in each group express the gene?** A bar below zero that stands for all cells in the group (100%): its coloured part is the share that expresses the gene, its grey part the share that does not, with the percentage underneath. (This is the information a dot plot encodes as dot size.)
 2.  **How strongly is the gene expressed in those cells?** A violin with points above zero, drawn from the non-zero values only. All violins have the same width, so their shapes can be compared even where few cells express the gene.
 
-![](images/comparison.png)
+![](images/violin_jitter_dotlin.png)
 
 In the violin and jitter plots above it is hard to tell that IL7R is expressed in 60–75% of CD4 T cells but in only 11–15% of monocytes, B cells and NK cells. The dotlin plot shows this directly, together with the expression levels in the expressing cells.
 
@@ -34,14 +34,18 @@ ggplot2 and scales are installed automatically. Seurat and SingleCellExperiment 
 ```r
 library(dotlinplot)
 
-# SeuratData::InstallData("pbmc3k")  # once, to get the example data
+# Example data: PBMC 3k, a public 10x Genomics dataset of blood cells, in the
+# version from Seurat's clustering tutorial (2,638 cells, labelled with 9 cell
+# types). Anyone can download the same object; install it once (about 90 MB):
+# remotes::install_github("satijalab/seurat-data")
+# SeuratData::InstallData("pbmc3k")
 pbmc <- SeuratData::LoadData("pbmc3k", type = "pbmc3k.final")
 
 genes <- c("LYZ", "CCL5", "IL32", "PTPRCAP", "FCGR3A", "PF4")
 dotlin_plot(pbmc, genes)
 ```
 
-For a Seurat object, cells are grouped by their identities (`Idents()`) and the log-normalised `"data"` layer is used, so nothing else is needed. Other inputs work the same way:
+With your own data, use your own Seurat object instead of `pbmc`. Cells are grouped by their identities (`Idents()`) and the log-normalised `"data"` layer is used, so nothing else is needed. Other inputs work the same way:
 
 ```r
 # SingleCellExperiment: uses colLabels() and the "logcounts" assay by default
@@ -55,16 +59,16 @@ Only values above zero count as expressed, so use non-negative data such as log-
 
 All genes share one y-axis, so they can be compared directly. For raw counts (`layer = "counts"`), where genes can differ a lot in range, `shared_y = FALSE` gives each gene its own y-axis.
 
-The result is a ggplot object, so it can be styled and saved as usual:
+The result is a ggplot object, so it can be styled and saved as usual. The genes are stacked on top of each other, so give the figure **3 inches of height plus 1 inch per gene**. A fixed small size squeezes the violins as soon as there are several genes.
 
 ```r
 library(ggplot2)
 
 # The categories are already named on the x-axis, so the legend can go
-dotlin_plot(pbmc, "LYZ", title = "LYZ") +
+p <- dotlin_plot(pbmc, genes) +
   theme(legend.position = "none")
 
-ggsave("dotlin_plot.png", width = 8, height = 4)
+ggsave("dotlin_plot.png", p, width = 8, height = 3 + length(genes))
 ```
 
 ## Arguments

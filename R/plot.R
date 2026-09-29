@@ -437,8 +437,6 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero,
   detection_data$label[percent == 0 & detection_data$nonzero_prop > 0] <- "<1%"
   detection_data$label[percent == 100 & detection_data$nonzero_prop < 1] <-
     ">99%"
-  # Bottom of the space kept free for the percentage below each bar.
-  detection_data$label_bottom <- -detection_data$max_expression * 0.3
 
   strip_data <- expression_long[expression_long$expression > 0, ,
                                 drop = FALSE]
@@ -506,9 +504,9 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
       ),
       inherit.aes = FALSE
     ) +
-    # The label hangs from the bottom of its bar (vjust > 1), so it never
-    # overlaps the bar, however short the panel is. The blank layer keeps
-    # room for it below the bars.
+    # The label hangs from the bottom of its bar (vjust > 1) into a gap of
+    # fixed size below the panel (see the theme), so it fits at any figure
+    # size.
     ggplot2::geom_text(
       data = plot_data$detection_data,
       mapping = ggplot2::aes(
@@ -521,23 +519,17 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
       colour = "#333333",
       inherit.aes = FALSE
     ) +
-    ggplot2::geom_blank(
-      data = plot_data$detection_data,
-      mapping = ggplot2::aes(
-        x = .data$x,
-        y = .data$label_bottom
-      ),
-      inherit.aes = FALSE
-    ) +
     ggplot2::geom_hline(
       yintercept = 0,
       colour = "#444444",
       linewidth = 0.3
     ) +
-    ggplot2::facet_wrap(
-      ~gene,
-      ncol = 1,
-      scales = if (shared_y) "fixed" else "free_y"
+    # One row per gene, named on the left: a title strip above each panel
+    # would take height from every gene.
+    ggplot2::facet_grid(
+      gene ~ .,
+      scales = if (shared_y) "fixed" else "free_y",
+      switch = "y"
     ) +
     ggplot2::labs(
       title = title,
@@ -559,15 +551,24 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
     ggplot2::scale_y_continuous(
       breaks = nonnegative_breaks
     ) +
-    # Labels may reach just past the panel in very short panels: better than
-    # cutting them off.
+    # The percentages are drawn below the panels, so they must not be clipped.
     ggplot2::coord_cartesian(
       clip = "off"
     ) +
     ggplot2::theme_classic() +
-    # Angled category names do not run into each other.
+    # Fixed gaps below the panels hold the percentages; with no x-axis line
+    # or ticks in the way, the zero line of each panel is its baseline.
+    # Angled category names do not run into each other; gene names sit
+    # outside the y-axis, unboxed and horizontal.
     ggplot2::theme(
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+      panel.spacing.y = ggplot2::unit(12, "pt"),
+      axis.line.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1,
+                                          margin = ggplot2::margin(t = 12)),
+      strip.placement = "outside",
+      strip.background = ggplot2::element_blank(),
+      strip.text.y.left = ggplot2::element_text(angle = 0, hjust = 1)
     )
 }
 

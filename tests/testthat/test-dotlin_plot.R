@@ -22,7 +22,6 @@ test_that("bars are scaled to the maximum expression of all genes", {
   # gene1 reaches 4 and gene2 reaches 6: both use 6.
   expect_equal(d$bar_ymin, rep(-0.15 * 6, 6))
   expect_equal(d$bar_ymax, rep(-0.05 * 6, 6))
-  expect_equal(d$label_bottom, rep(-0.3 * 6, 6))
 
   expect_equal(d$x, rep(1:3, 2))
   expect_equal(d$bar_xmin, d$x - 0.325)
@@ -192,18 +191,29 @@ test_that("y-axis ticks are as fine as on an ordinary plot of the data", {
                ticks(ordinary))
 })
 
-test_that("percentages hang below their bars, inside the panel", {
+test_that("percentages hang below their bars into a gap of fixed size", {
   p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
   is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
                     logical(1))
   labels <- ggplot2::layer_data(p, which(is_text))
   d <- detection_data(p)
-  y_range <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y$
-    continuous_range
+  in_pt <- function(u) grid::convertUnit(u, "pt", valueOnly = TRUE)
 
   expect_equal(sort(labels$y), sort(d$bar_ymin))
   expect_gt(p$layers[[which(is_text)]]$aes_params$vjust, 1)
-  expect_lt(y_range[1], min(d$label_bottom))
+  expect_equal(p$coordinates$clip, "off")
+  # Room in points, not data units, so it does not shrink with the panel.
+  expect_gte(in_pt(p$theme$panel.spacing.y), 10)
+  expect_gte(in_pt(p$theme$axis.text.x$margin[1]), 10)
+})
+
+test_that("gene names sit to the left of their panels, without boxes", {
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
+
+  expect_s3_class(p$facet, "FacetGrid")
+  expect_equal(p$theme$strip.placement, "outside")
+  expect_equal(p$theme$strip.text.y.left$angle, 0)
+  expect_s3_class(p$theme$strip.background, "element_blank")
 })
 
 test_that("category names are angled so that they do not overlap", {

@@ -5,3 +5,4 @@
 *.Rcheck/
 dotlinplot_*.tar.gz
 **/.DS_Store
+Rplots.pdf
