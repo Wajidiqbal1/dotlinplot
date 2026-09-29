@@ -437,6 +437,11 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero,
   detection_data$label[percent == 0 & detection_data$nonzero_prop > 0] <- "<1%"
   detection_data$label[percent == 100 & detection_data$nonzero_prop < 1] <-
     ">99%"
+  # Centre of the percentage below each bar in a single-gene plot, as in the
+  # original plot. With several genes the percentage hangs from its bar and
+  # room is kept down to `label_bottom`.
+  detection_data$label_y <- -detection_data$bar_height * 1.5
+  detection_data$label_bottom <- -detection_data$max_expression * 0.3
 
   strip_data <- expression_long[expression_long$expression > 0, ,
                                 drop = FALSE]
@@ -459,6 +464,89 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero,
 # Construct the ggplot.
 build_plot <- function(plot_data, categories, category_label, palette, title,
                        shared_y, point_size, point_alpha, jitter_width) {
+  single_gene <- nlevels(plot_data$detection_data$gene) == 1
+
+  # A single gene gets a boxed title strip above its panel. Several genes are
+  # stacked in rows named on the left, as a strip above each panel would take
+  # height from every gene.
+  if (single_gene) {
+    gene_layout <- list(
+      ggplot2::facet_wrap(~gene),
+      # The box has the axis line's width and is not clipped, so both lines
+      # are centred on the same edge and the y-axis continues into the box
+      # without a step.
+      ggplot2::theme(
+        strip.background = ggplot2::element_rect(colour = "black",
+                                                 linewidth = ggplot2::rel(1)),
+        strip.clip = "off"
+      )
+    )
+  } else {
+    gene_layout <- list(
+      ggplot2::facet_grid(
+        gene ~ .,
+        scales = if (shared_y) "fixed" else "free_y",
+        switch = "y"
+      ),
+      ggplot2::theme(
+        strip.placement = "outside",
+        strip.background = ggplot2::element_blank(),
+        strip.text.y.left = ggplot2::element_text(angle = 0, hjust = 1)
+      )
+    )
+  }
+
+  # With one gene, each percentage is centred 1.5 bar heights below zero and
+  # the panel ends just below it, as in the original plot. With several
+  # genes, panels can be short, so the percentage hangs from its bar
+  # (vjust > 1) to never overlap it, and a blank layer keeps room for it.
+  if (single_gene) {
+    label_layers <- list(
+      ggplot2::geom_text(
+        data = plot_data$detection_data,
+        mapping = ggplot2::aes(
+          x = .data$x,
+          y = .data$label_y,
+          label = .data$label
+        ),
+        size = 7 / ggplot2::.pt,
+        colour = "#333333",
+        inherit.aes = FALSE
+      )
+    )
+  } else {
+    label_layers <- list(
+      ggplot2::geom_text(
+        data = plot_data$detection_data,
+        mapping = ggplot2::aes(
+          x = .data$x,
+          y = .data$bar_ymin,
+          label = .data$label
+        ),
+        vjust = 1.2,
+        size = 7 / ggplot2::.pt,
+        colour = "#333333",
+        inherit.aes = FALSE
+      ),
+      ggplot2::geom_blank(
+        data = plot_data$detection_data,
+        mapping = ggplot2::aes(
+          x = .data$x,
+          y = .data$label_bottom
+        ),
+        inherit.aes = FALSE
+      )
+    )
+  }
+
+  # Category names are angled only when some are long enough to run into
+  # each other.
+  if (max(nchar(categories)) > 5) {
+    category_text <- ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+  } else {
+    category_text <- ggplot2::element_text()
+  }
+
   ggplot2::ggplot(
     plot_data$expression_long,
     ggplot2::aes(x = .data$x, y = .data$expression, fill = .data$category)
@@ -504,32 +592,11 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
       ),
       inherit.aes = FALSE
     ) +
-    # The label hangs from the bottom of its bar (vjust > 1) into a gap of
-    # fixed size below the panel (see the theme), so it fits at any figure
-    # size.
-    ggplot2::geom_text(
-      data = plot_data$detection_data,
-      mapping = ggplot2::aes(
-        x = .data$x,
-        y = .data$bar_ymin,
-        label = .data$label
-      ),
-      vjust = 1.2,
-      size = 7 / ggplot2::.pt,
-      colour = "#333333",
-      inherit.aes = FALSE
-    ) +
+    label_layers +
     ggplot2::geom_hline(
       yintercept = 0,
       colour = "#444444",
       linewidth = 0.3
-    ) +
-    # One row per gene, named on the left: a title strip above each panel
-    # would take height from every gene.
-    ggplot2::facet_grid(
-      gene ~ .,
-      scales = if (shared_y) "fixed" else "free_y",
-      switch = "y"
     ) +
     ggplot2::labs(
       title = title,
@@ -551,25 +618,16 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
     ggplot2::scale_y_continuous(
       breaks = nonnegative_breaks
     ) +
-    # The percentages are drawn below the panels, so they must not be clipped.
+    # In a very short panel a percentage may reach past the panel: better
+    # than cutting it off.
     ggplot2::coord_cartesian(
       clip = "off"
     ) +
     ggplot2::theme_classic() +
-    # Fixed gaps below the panels hold the percentages; with no x-axis line
-    # or ticks in the way, the zero line of each panel is its baseline.
-    # Angled category names do not run into each other; gene names sit
-    # outside the y-axis, unboxed and horizontal.
     ggplot2::theme(
-      panel.spacing.y = ggplot2::unit(12, "pt"),
-      axis.line.x = ggplot2::element_blank(),
-      axis.ticks.x = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1,
-                                          margin = ggplot2::margin(t = 12)),
-      strip.placement = "outside",
-      strip.background = ggplot2::element_blank(),
-      strip.text.y.left = ggplot2::element_text(angle = 0, hjust = 1)
-    )
+      axis.text.x = category_text
+    ) +
+    gene_layout
 }
 
 
@@ -663,7 +721,7 @@ dotlin_plot <- function(object,
                         layer = NULL,
                         assay = NULL,
                         title = NULL,
-                        point_size = 1,
+                        point_size = 0.7,
                         point_alpha = 0.6,
                         jitter_width = 0.1) {
   genes <- validate_inputs(

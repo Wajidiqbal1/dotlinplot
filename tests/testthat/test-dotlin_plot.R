@@ -191,23 +191,41 @@ test_that("y-axis ticks are as fine as on an ordinary plot of the data", {
                ticks(ordinary))
 })
 
-test_that("percentages hang below their bars into a gap of fixed size", {
+test_that("percentages hang below their bars, inside the frame", {
   p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
   is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
                     logical(1))
   labels <- ggplot2::layer_data(p, which(is_text))
   d <- detection_data(p)
-  in_pt <- function(u) grid::convertUnit(u, "pt", valueOnly = TRUE)
+  y_range <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y$
+    continuous_range
 
   expect_equal(sort(labels$y), sort(d$bar_ymin))
   expect_gt(p$layers[[which(is_text)]]$aes_params$vjust, 1)
-  expect_equal(p$coordinates$clip, "off")
-  # Room in points, not data units, so it does not shrink with the panel.
-  expect_gte(in_pt(p$theme$panel.spacing.y), 10)
-  expect_gte(in_pt(p$theme$axis.text.x$margin[1]), 10)
+  # Room for the percentages inside the panel, above the x-axis line
+  expect_lt(y_range[1], min(d$label_bottom))
+  expect_s3_class(ggplot2::calc_element("axis.line.x.bottom", p$theme),
+                  "element_line")
 })
 
-test_that("gene names sit to the left of their panels, without boxes", {
+test_that("a single gene is named in a boxed strip above its panel", {
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+
+  expect_s3_class(p$facet, "FacetWrap")
+  expect_false(inherits(p$theme$strip.background, "element_blank"))
+})
+
+test_that("the gene box lines up with the y-axis line", {
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  axis <- ggplot2::calc_element("axis.line.y.left", p$theme)
+  box <- ggplot2::calc_element("strip.background", p$theme)
+
+  # Same width and not clipped, so both are centred on the panel edge.
+  expect_equal(box$linewidth, axis$linewidth)
+  expect_equal(p$theme$strip.clip, "off")
+})
+
+test_that("several genes are named to the left of their panels, unboxed", {
   p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
 
   expect_s3_class(p$facet, "FacetGrid")
@@ -216,10 +234,29 @@ test_that("gene names sit to the left of their panels, without boxes", {
   expect_s3_class(p$theme$strip.background, "element_blank")
 })
 
-test_that("category names are angled so that they do not overlap", {
-  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+test_that("category names are angled only when they are long", {
+  short <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  cells <- toy_data()
+  cells$cell_type <- paste(cells$cell_type, "cells")
+  long <- dotlin_plot(cells, "gene1", "cell_type")
 
-  expect_equal(p$theme$axis.text.x$angle, 45)
+  expect_equal(long$theme$axis.text.x$angle, 45)
+  expect_null(short$theme$axis.text.x$angle)
+})
+
+test_that("a single gene has the original geometry below zero", {
+  # gene1 reaches 4: bar from -0.2 to -0.6, percentage centred at -0.9, and
+  # the panel ends at the usual 5% margin below it.
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
+                    logical(1))
+  labels <- ggplot2::layer_data(p, which(is_text))
+  y_range <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y$
+    continuous_range
+
+  expect_equal(unique(labels$y), -0.9)
+  expect_equal(unique(labels$vjust), 0.5)
+  expect_equal(y_range[1], -0.9 - 0.05 * (4 + 0.9))
 })
 
 test_that("all gene panels share the same y-axis", {
@@ -260,10 +297,10 @@ test_that("violins have the same width whatever the share of expression", {
   expect_equal(as.vector(widths), rep(0.9, 4))
 })
 
-test_that("points have the default size of 1", {
+test_that("points have the default size of 0.7, as in the original", {
   p <- dotlin_plot(toy_data(), "gene1", "cell_type")
 
-  expect_true(all(ggplot2::layer_data(p, 2)$size == 1))
+  expect_true(all(ggplot2::layer_data(p, 2)$size == 0.7))
 })
 
 test_that("labels never hide a few expressing or non-expressing cells", {

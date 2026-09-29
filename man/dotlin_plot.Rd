@@ -15,7 +15,7 @@ dotlin_plot(
   layer = NULL,
   assay = NULL,
   title = NULL,
-  point_size = 1,
+  point_size = 0.7,
   point_alpha = 0.6,
   jitter_width = 0.1
 )
