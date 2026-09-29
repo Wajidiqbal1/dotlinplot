@@ -27,7 +27,7 @@ In the violin and jitter plots above it is hard to tell that IL7R is expressed i
 remotes::install_github("Wajidiqbal1/dotlinplot")
 ```
 
-ggplot2 and scales are installed automatically. Seurat and SingleCellExperiment objects work whenever those packages are installed.
+ggplot2 and scales are installed automatically. Seurat objects need SeuratObject 5.0 or later (installed with Seurat 5); SingleCellExperiment objects work whenever that package is installed.
 
 ## Usage
 
@@ -45,7 +45,7 @@ genes <- c("LYZ", "CCL5", "IL32", "PTPRCAP", "FCGR3A", "PF4")
 dotlin_plot(pbmc, genes)
 ```
 
-With your own data, use your own Seurat object instead of `pbmc`. Cells are grouped by their identities (`Idents()`) and the log-normalised `"data"` layer is used, so nothing else is needed. Other inputs work the same way:
+With your own data, use your own Seurat object instead of `pbmc`. Cells are grouped by their identities (`Idents()`) and the log-normalised `"data"` layer is used, so nothing else is needed. Objects made with Seurat v3 or v4 need updating first: `pbmc <- SeuratObject::UpdateSeuratObject(pbmc)`. Other inputs work the same way:
 
 ```r
 # SingleCellExperiment: uses colLabels() and the "logcounts" assay by default
@@ -59,7 +59,7 @@ Only values above zero count as expressed, so use non-negative data such as log-
 
 All genes share one y-axis, so they can be compared directly. For raw counts (`layer = "counts"`), where genes can differ a lot in range, `shared_y = FALSE` gives each gene its own y-axis.
 
-The result is a ggplot object, so it can be styled and saved as usual. The genes are stacked on top of each other, so give the figure **3 inches of height plus 1 inch per gene**. A fixed small size squeezes the violins as soon as there are several genes.
+The result is a ggplot object, so it can be styled and saved as usual. The genes are stacked on top of each other, so give the figure **3 inches of height plus 1 inch per gene**. A fixed small size squeezes the violins as soon as there are several genes. The percentages are drawn at 7 pt; when a figure is too small for that (many genes, many categories or a narrow figure), they are drawn just small enough not to overlap, and a larger figure brings them back to full size.
 
 ```r
 library(ggplot2)
@@ -79,13 +79,13 @@ ggsave("dotlin_plot.png", p, width = 8, height = 3 + length(genes))
 | `genes`          | ---     | Genes to show, one panel each, in the order given. |
 | `category_col`   | `NULL`  | Metadata column that holds the categories. `NULL` uses the identities (Seurat) or cell labels (SingleCellExperiment); required for data frames. |
 | `palette`        | `NULL`  | Colours: a named vector or list mapping categories to colours, or unnamed colours in category order. `NULL` uses the ggplot2 hue palette. |
-| `category_order` | `NULL`  | Categories to show, in x-axis order; categories not listed are left out. By default: factor levels, or sorted values. |
+| `category_order` | `NULL`  | Categories to show, in x-axis order; categories not listed are left out. By default: factor levels, or sorted values (numbers stored as text, such as cluster numbers, in numeric order). |
 | `min_nonzero`    | `10`    | Smallest number of expressing cells (not a percentage) for which a violin is drawn. |
 | `shared_y`       | `TRUE`  | All genes share one y-axis. `FALSE` gives each gene its own y-axis (e.g. for raw counts). |
 | `layer`          | `NULL`  | Expression matrix: a Seurat layer (default `"data"`) or a SingleCellExperiment assay (default `"logcounts"`). |
 | `assay`          | `NULL`  | Seurat assay to use (default `DefaultAssay(object)`). |
 | `title`          | `NULL`  | Plot title. |
-| `point_size`     | `1`     | Size of the points. |
+| `point_size`     | `0.7`   | Size of the points. |
 | `point_alpha`    | `0.6`   | Opacity of the points. |
 | `jitter_width`   | `0.1`   | Horizontal jitter of the points. |
 
