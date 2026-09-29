@@ -92,6 +92,15 @@ test_that("categories follow factor levels, or sorted values otherwise", {
   cells$cell_type <- rep(c(10, 2, 1), times = c(20, 10, 5))
   p <- dotlin_plot(cells, "gene1", "cell_type")
   expect_equal(levels(detection_data(p)$category), c("1", "2", "10"))
+
+  # Numbers stored as text are sorted as numbers, other text as text.
+  cells$cell_type <- rep(c("10", "2", "1"), times = c(20, 10, 5))
+  p <- dotlin_plot(cells, "gene1", "cell_type")
+  expect_equal(levels(detection_data(p)$category), c("1", "2", "10"))
+
+  cells$cell_type <- rep(c("10", "2", "x"), times = c(20, 10, 5))
+  p <- dotlin_plot(cells, "gene1", "cell_type")
+  expect_equal(levels(detection_data(p)$category), c("10", "2", "x"))
 })
 
 test_that("the legend follows the category order", {
@@ -100,6 +109,18 @@ test_that("the legend follows the category order", {
   fill <- ggplot2::ggplot_build(p)$plot$scales$get_scales("fill")
 
   expect_equal(fill$get_limits(), c("A", "B", "C"))
+})
+
+test_that("the legend shows plain coloured squares, as in the original", {
+  # Only the coloured part of the bars is in the legend, not the violins or
+  # the points.
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  in_legend <- vapply(p$layers, function(l) !isFALSE(l$show.legend),
+                      logical(1))
+  geoms <- vapply(p$layers, function(l) class(l$geom)[1], character(1))
+
+  expect_false(any(in_legend[geoms %in% c("GeomViolin", "GeomPoint")]))
+  expect_true(any(in_legend[geoms == "GeomRect"]))
 })
 
 test_that("x-axis breaks and labels match the categories", {

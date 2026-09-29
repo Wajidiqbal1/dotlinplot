@@ -306,6 +306,16 @@ get_data_frame_data <- function(object, genes, category_col, layer, assay) {
 get_categories <- function(category, category_label, category_order = NULL) {
   observed <- levels(factor(category))
 
+  # Numbers stored as text, such as cluster numbers, are sorted as numbers
+  # ("2" before "10"), not as text.
+  if (!is.factor(category)) {
+    numbers <- suppressWarnings(as.numeric(observed))
+
+    if (!anyNA(numbers)) {
+      observed <- observed[order(numbers)]
+    }
+  }
+
   if (length(observed) == 0) {
     stop("'", category_label, "' has no non-missing categories.",
          call. = FALSE)
@@ -669,7 +679,7 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #' @param category_order Categories to show, in the order they should appear
 #'   on the x-axis; categories that are not listed are left out. By default all
 #'   categories are shown, in factor-level order (or sorted, if the column is
-#'   not a factor).
+#'   not a factor; numbers stored as text are sorted as numbers).
 #' @param min_nonzero Smallest number of expressing cells for which a violin
 #'   is drawn. This is a number of cells, not a percentage: in a small
 #'   category, a high percentage can still be too few cells for a violin.

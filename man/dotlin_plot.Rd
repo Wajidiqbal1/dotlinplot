@@ -39,7 +39,7 @@ If \code{NULL}, the default ggplot2 hue palette is used.}
 \item{category_order}{Categories to show, in the order they should appear
 on the x-axis; categories that are not listed are left out. By default all
 categories are shown, in factor-level order (or sorted, if the column is
-not a factor).}
+not a factor; numbers stored as text are sorted as numbers).}
 
 \item{min_nonzero}{Smallest number of expressing cells for which a violin
 is drawn. This is a number of cells, not a percentage: in a small
