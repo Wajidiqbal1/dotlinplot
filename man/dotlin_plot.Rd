@@ -90,6 +90,11 @@ violin, as a density estimated from a handful of values is not meaningful.
 By default all gene panels share one y-axis, so genes can be compared
 directly.
 
+The percentages are drawn at 7 pt. When the figure is too small for that
+(many genes, many categories or a narrow figure), they are drawn just small
+enough not to overlap each other, their bars or the panel edges; a larger
+figure keeps them at full size.
+
 Only values above zero count as expressed, so use non-negative data such as
 log-normalised expression (the default for Seurat and SingleCellExperiment
 objects), not scaled data. A warning is given if negative values are found.

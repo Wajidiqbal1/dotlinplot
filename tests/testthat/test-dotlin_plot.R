@@ -214,7 +214,8 @@ test_that("y-axis ticks are as fine as on an ordinary plot of the data", {
 
 test_that("percentages hang below their bars, inside the frame", {
   p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
-  is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
+  is_text <- vapply(p$layers,
+                    function(l) inherits(l$geom, "GeomPercentage"),
                     logical(1))
   labels <- ggplot2::layer_data(p, which(is_text))
   d <- detection_data(p)
@@ -269,7 +270,8 @@ test_that("a single gene has the original geometry below zero", {
   # gene1 reaches 4: bar from -0.2 to -0.6, percentage centred at -0.9, and
   # the panel ends at the usual 5% margin below it.
   p <- dotlin_plot(toy_data(), "gene1", "cell_type")
-  is_text <- vapply(p$layers, function(l) inherits(l$geom, "GeomText"),
+  is_text <- vapply(p$layers,
+                    function(l) inherits(l$geom, "GeomPercentage"),
                     logical(1))
   labels <- ggplot2::layer_data(p, which(is_text))
   y_range <- ggplot2::ggplot_build(p)$layout$panel_params[[1]]$y$
@@ -385,4 +387,53 @@ test_that("invalid arguments give informative errors", {
                "character vector")
   expect_error(dotlin_plot(as.matrix(cells), "gene1", "cell_type"),
                "must be a Seurat object")
+})
+
+# The font sizes of the percentages as drawn in a figure of the given size,
+# one per panel.
+drawn_percentage_sizes <- function(p, width, height) {
+  grDevices::pdf(NULL, width = width, height = height)
+  on.exit(grDevices::dev.off())
+  print(p)
+  grid::grid.force()
+  text <- grid::grid.get("^percentages$", grep = TRUE, global = TRUE)
+  if (inherits(text, "grob")) {
+    text <- list(text)
+  }
+  vapply(text, function(g) g$gp$fontsize, numeric(1))
+}
+
+test_that("percentages are drawn at 7 pt when they fit", {
+  p <- dotlin_plot(toy_data(), "gene1", "cell_type")
+  expect_equal(drawn_percentage_sizes(p, 8, 5), 7)
+
+  p <- dotlin_plot(toy_data(), c("gene1", "gene2"), "cell_type")
+  expect_equal(drawn_percentage_sizes(p, 8, 5), c(7, 7))
+})
+
+test_that("percentages shrink together when the panels are too short", {
+  cells <- toy_data()
+  for (i in 3:10) {
+    cells[[paste0("gene", i)]] <- cells$gene1
+  }
+  p <- dotlin_plot(cells, paste0("gene", 1:10), "cell_type")
+
+  sizes <- drawn_percentage_sizes(p, 8, 5)
+  expect_length(sizes, 10)
+  expect_lt(max(sizes), 7)
+  expect_equal(min(sizes), max(sizes), tolerance = 1e-6)
+
+  # The same plot drawn taller keeps the full size.
+  expect_equal(unique(drawn_percentage_sizes(p, 8, 20)), 7)
+})
+
+test_that("percentages shrink when the categories are close together", {
+  cells <- data.frame(
+    group = factor(rep(1:40, each = 5)),
+    gene = rep(c(1, 0, 0, 2, 3), times = 40)
+  )
+  p <- dotlin_plot(cells, "gene", "group")
+
+  expect_lt(drawn_percentage_sizes(p, 6, 4), 7)
+  expect_equal(drawn_percentage_sizes(p, 30, 4), 7)
 })

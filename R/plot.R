@@ -469,6 +469,123 @@ prepare_plot_data <- function(expression, category, categories, min_nonzero,
 }
 
 
+# Percentages ------------------------------------------------------------------
+
+# The percentages are drawn at 7 pt when they fit. How much room they have is
+# only known when the plot is drawn (in the RStudio pane, after resizing it,
+# or by ggsave()), so they are sized then: if two neighbouring percentages
+# would come closer than half the height of the text, or a percentage would
+# reach past its bar or the edge of its panel, all percentages are made
+# smaller by the same factor, just enough to fit.
+# Named like ggplot2's own geoms.
+GeomPercentage <- ggplot2::ggproto( # nolint: object_name_linter.
+  "GeomPercentage", ggplot2::Geom,
+  required_aes = c("x", "y", "ymin", "label"),
+  default_aes = ggplot2::aes(colour = "#333333", size = 7 / ggplot2::.pt,
+                             vjust = 0.5),
+  draw_key = ggplot2::draw_key_blank,
+  # `ymin` is the bottom of the bar above each percentage. `rows` holds the
+  # percentages of every panel in x-axis order, so that all panels get the
+  # same size.
+  draw_panel = function(data, panel_params, coord, rows) {
+    categories <- coord$transform(data.frame(x = c(1, 2), y = c(0, 0)),
+                                  panel_params)
+    grid::gTree(
+      data = coord$transform(data, panel_params),
+      rows = rows,
+      category_spacing = abs(diff(categories$x)),
+      cl = "dotlin_percentages"
+    )
+  }
+)
+
+#' @exportS3Method grid::makeContent
+makeContent.dotlin_percentages <- function(x) {
+  data <- x$data
+  labels <- unique(unlist(x$rows))
+  in_points <- function(npc, convert) {
+    convert(grid::unit(npc, "npc"), "pt", valueOnly = TRUE)
+  }
+
+  # Room between two categories, and from each percentage down to the panel
+  # edge and up to its bar.
+  spacing <- in_points(x$category_spacing, grid::convertWidth)
+  y <- in_points(data$y, grid::convertHeight)
+  bar_bottom <- in_points(data$ymin, grid::convertHeight)
+
+  # The factor by which text of the given size must shrink to fit (1 if it
+  # fits): neighbouring percentages need a gap of half the text height, and
+  # half a point is kept to the bar and to the panel edge.
+  shrink_needed <- function(font_size) {
+    gp <- grid::gpar(fontsize = font_size)
+    widths <- vapply(labels, function(label) {
+      grid::convertWidth(grid::grobWidth(grid::textGrob(label, gp = gp)),
+                         "pt", valueOnly = TRUE)
+    }, numeric(1))
+    height <- grid::convertHeight(
+      grid::grobHeight(grid::textGrob(labels, gp = gp)), "pt",
+      valueOnly = TRUE
+    )
+    # Space needed between the centres of two neighbouring categories.
+    needed <- vapply(x$rows, function(row) {
+      w <- widths[row]
+      if (length(w) < 2) 0 else max(w[-1] + w[-length(w)]) / 2
+    }, numeric(1))
+
+    min(
+      1,
+      spacing / (max(needed) + height / 2),
+      (y - 0.5) / (data$vjust * height),
+      ((bar_bottom - y - 0.5) / ((1 - data$vjust) * height))[data$vjust < 1]
+    )
+  }
+
+  # Some devices, such as pdf(), draw text in whole points, so the text is
+  # measured again at the smaller size until it fits.
+  font_size <- data$size[1] * ggplot2::.pt
+  for (i in 1:5) {
+    shrink <- shrink_needed(font_size)
+    if (shrink >= 1) {
+      break
+    }
+    font_size <- max(font_size * shrink, 0.1)
+  }
+
+  grid::setChildren(x, grid::gList(grid::textGrob(
+    data$label,
+    x = grid::unit(data$x, "npc"),
+    y = grid::unit(data$y, "npc"),
+    vjust = data$vjust,
+    gp = grid::gpar(col = data$colour, fontsize = font_size),
+    name = "percentages"
+  )))
+}
+
+# The percentages below the bars, centred on (`vjust = 0.5`) or hanging from
+# (`vjust > 1`) the y position in column `y` of the detection data.
+percentage_layer <- function(detection_data, y, vjust) {
+  ggplot2::layer(
+    geom = GeomPercentage,
+    stat = "identity",
+    position = "identity",
+    data = detection_data,
+    mapping = ggplot2::aes(
+      x = .data$x,
+      y = .data[[y]],
+      ymin = .data$bar_ymin,
+      label = .data$label
+    ),
+    inherit.aes = FALSE,
+    show.legend = FALSE,
+    params = list(
+      vjust = vjust,
+      rows = unname(split(detection_data$label[order(detection_data$x)],
+                          detection_data$gene[order(detection_data$x)]))
+    )
+  )
+}
+
+
 # Plot construction ------------------------------------------------------------
 
 # Construct the ggplot.
@@ -512,32 +629,11 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
   # (vjust > 1) to never overlap it, and a blank layer keeps room for it.
   if (single_gene) {
     label_layers <- list(
-      ggplot2::geom_text(
-        data = plot_data$detection_data,
-        mapping = ggplot2::aes(
-          x = .data$x,
-          y = .data$label_y,
-          label = .data$label
-        ),
-        size = 7 / ggplot2::.pt,
-        colour = "#333333",
-        inherit.aes = FALSE
-      )
+      percentage_layer(plot_data$detection_data, y = "label_y", vjust = 0.5)
     )
   } else {
     label_layers <- list(
-      ggplot2::geom_text(
-        data = plot_data$detection_data,
-        mapping = ggplot2::aes(
-          x = .data$x,
-          y = .data$bar_ymin,
-          label = .data$label
-        ),
-        vjust = 1.2,
-        size = 7 / ggplot2::.pt,
-        colour = "#333333",
-        inherit.aes = FALSE
-      ),
+      percentage_layer(plot_data$detection_data, y = "bar_ymin", vjust = 1.2),
       ggplot2::geom_blank(
         data = plot_data$detection_data,
         mapping = ggplot2::aes(
@@ -660,6 +756,11 @@ build_plot <- function(plot_data, categories, category_label, palette, title,
 #' violin, as a density estimated from a handful of values is not meaningful.
 #' By default all gene panels share one y-axis, so genes can be compared
 #' directly.
+#'
+#' The percentages are drawn at 7 pt. When the figure is too small for that
+#' (many genes, many categories or a narrow figure), they are drawn just small
+#' enough not to overlap each other, their bars or the panel edges; a larger
+#' figure keeps them at full size.
 #'
 #' Only values above zero count as expressed, so use non-negative data such as
 #' log-normalised expression (the default for Seurat and SingleCellExperiment

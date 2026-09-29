@@ -17,6 +17,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
     ggplot2 (>= 3.4.0),
+    grid,
     scales (>= 1.1.0)
 Suggests:
     Matrix,
